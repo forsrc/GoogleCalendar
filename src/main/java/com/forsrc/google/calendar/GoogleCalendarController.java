@@ -1,29 +1,31 @@
 package com.forsrc.google.calendar;
 
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.security.GeneralSecurityException;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Date;
+import java.util.Iterator;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.view.RedirectView;
 
-import com.example.demo.CalendarQuickstart;
 import com.google.api.client.auth.oauth2.AuthorizationCodeRequestUrl;
 import com.google.api.client.auth.oauth2.Credential;
 import com.google.api.client.extensions.java6.auth.oauth2.AuthorizationCodeInstalledApp;
 import com.google.api.client.extensions.jetty.auth.oauth2.LocalServerReceiver;
 import com.google.api.client.googleapis.auth.oauth2.GoogleAuthorizationCodeFlow;
 import com.google.api.client.googleapis.auth.oauth2.GoogleClientSecrets;
-import com.google.api.client.googleapis.auth.oauth2.GoogleClientSecrets.Details;
 import com.google.api.client.googleapis.javanet.GoogleNetHttpTransport;
 import com.google.api.client.http.javanet.NetHttpTransport;
 import com.google.api.client.json.JsonFactory;
@@ -43,14 +45,16 @@ public class GoogleCalendarController {
     private static final String CREDENTIALS_FOLDER = "google/credentials"; // Directory to store user credentials.
     private static final List<String> SCOPES = Collections.singletonList(CalendarScopes.CALENDAR);
     private static final String CLIENT_SECRET_DIR = "/credentials.json";
+    private List<LocalServerReceiver> servers = new ArrayList<>();
 
-    private Credential getCredentials(CompletableFuture<LocalServerReceiver> localServerReceiverFuture,
+    private Credential getCredentials(final CompletableFuture<LocalServerReceiver> localServerReceiverFuture,
             final NetHttpTransport netHttpTransport) throws IOException {
 
         // Build flow and trigger user authorization request.
         GoogleAuthorizationCodeFlow flow = getFlow(netHttpTransport);
         LocalServerReceiver localServerReceiver = new LocalServerReceiver();
-        System.out.println(localServerReceiver.getRedirectUri());
+        servers.add(localServerReceiver);
+        // System.out.println(localServerReceiver.getRedirectUri());
         localServerReceiverFuture.complete(localServerReceiver);
         return new AuthorizationCodeInstalledApp(flow, localServerReceiver).authorize("user");
     }
@@ -74,7 +78,7 @@ public class GoogleCalendarController {
         return GoogleNetHttpTransport.newTrustedTransport();
     }
 
-    private String getAuthorizeUrl(GoogleAuthorizationCodeFlow flow, String redirectURI) throws Exception {
+    private String getAuthorizeUrl(final GoogleAuthorizationCodeFlow flow, final String redirectURI) throws Exception {
         AuthorizationCodeRequestUrl authorizationUrl = flow.newAuthorizationUrl().setRedirectUri(redirectURI);
         System.out.println("cal authorizationUrl->" + authorizationUrl);
         return authorizationUrl.build();
@@ -82,9 +86,11 @@ public class GoogleCalendarController {
 
     @RequestMapping(value = "/login")
     public RedirectView login() throws Exception {
+
         CompletableFuture<LocalServerReceiver> localServerReceiverFuture = new CompletableFuture<>();
         final NetHttpTransport netHttpTransport = getNetHttpTransport();
         GoogleAuthorizationCodeFlow flow = getFlow(netHttpTransport);
+        TimeUnit.SECONDS.sleep(3);
         CompletableFuture.runAsync(() -> {
             try {
                 getCredentials(localServerReceiverFuture, netHttpTransport);
@@ -119,4 +125,26 @@ public class GoogleCalendarController {
         }
         return new ResponseEntity<>(list, HttpStatus.OK);
     }
+
+    @RequestMapping(value = "/stop")
+    public ResponseEntity<String> stop() {
+        int count = servers.size();
+        Iterator<LocalServerReceiver> it = servers.iterator();
+        while (it.hasNext()) {
+            try {
+                it.next().stop();
+            } catch (Exception e2) {
+            }
+            it.remove();
+        }
+        return new ResponseEntity<>(count + " stoped on " + new Date(), HttpStatus.OK);
+    }
+
+    @RequestMapping(value = "/rm")
+    public ResponseEntity<String> rm() {
+        File file = new java.io.File(CREDENTIALS_FOLDER + "/StoredCredential");
+        return new ResponseEntity<>(file.getAbsolutePath() + " " + file.delete() + " rm on " + new Date(),
+                HttpStatus.OK);
+    }
+
 }
