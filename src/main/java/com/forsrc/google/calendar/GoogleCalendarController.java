@@ -44,13 +44,13 @@ public class GoogleCalendarController {
     private static final List<String> SCOPES = Collections.singletonList(CalendarScopes.CALENDAR);
     private static final String CLIENT_SECRET_DIR = "/credentials.json";
 
-    private CompletableFuture<LocalServerReceiver> localServerReceiverFuture = new CompletableFuture<>();
-
-    private Credential getCredentials(final NetHttpTransport netHttpTransport) throws IOException {
+    private Credential getCredentials(CompletableFuture<LocalServerReceiver> localServerReceiverFuture,
+            final NetHttpTransport netHttpTransport) throws IOException {
 
         // Build flow and trigger user authorization request.
         GoogleAuthorizationCodeFlow flow = getFlow(netHttpTransport);
         LocalServerReceiver localServerReceiver = new LocalServerReceiver();
+        System.out.println(localServerReceiver.getRedirectUri());
         localServerReceiverFuture.complete(localServerReceiver);
         return new AuthorizationCodeInstalledApp(flow, localServerReceiver).authorize("user");
     }
@@ -82,12 +82,12 @@ public class GoogleCalendarController {
 
     @RequestMapping(value = "/login")
     public RedirectView login() throws Exception {
-        localServerReceiverFuture = new CompletableFuture<>();
+        CompletableFuture<LocalServerReceiver> localServerReceiverFuture = new CompletableFuture<>();
         final NetHttpTransport netHttpTransport = getNetHttpTransport();
         GoogleAuthorizationCodeFlow flow = getFlow(netHttpTransport);
         CompletableFuture.runAsync(() -> {
             try {
-                getCredentials(netHttpTransport);
+                getCredentials(localServerReceiverFuture, netHttpTransport);
             } catch (IOException e) {
                 e.printStackTrace();
             }
@@ -98,10 +98,12 @@ public class GoogleCalendarController {
 
     @RequestMapping(value = "/list")
     public ResponseEntity<List<String>> list() throws GeneralSecurityException, IOException {
+        CompletableFuture<LocalServerReceiver> localServerReceiverFuture = new CompletableFuture<>();
         List<String> list = new ArrayList<>();
         NetHttpTransport netHttpTransport = getNetHttpTransport();
-        Calendar calendar = new Calendar.Builder(netHttpTransport, JSON_FACTORY, getCredentials(netHttpTransport))
-                .setApplicationName(APPLICATION_NAME).build();
+        Calendar calendar = new Calendar.Builder(netHttpTransport, JSON_FACTORY,
+                getCredentials(localServerReceiverFuture, netHttpTransport)).setApplicationName(APPLICATION_NAME)
+                        .build();
 
         DateTime now = new DateTime(System.currentTimeMillis());
         Events events = calendar.events().list("primary").setMaxResults(10).setTimeMin(now).setOrderBy("startTime")
