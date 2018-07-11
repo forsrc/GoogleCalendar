@@ -46,7 +46,6 @@ public class GoogleCalendarController {
     private static final List<String> SCOPES = Collections.singletonList(CalendarScopes.CALENDAR);
     private static final String CLIENT_SECRET_DIR = "/credentials.json";
     private List<LocalServerReceiver> servers = new ArrayList<>();
-    private LocalServerReceiver localServerReceiver;
 
     private Credential getCredentials(final CompletableFuture<LocalServerReceiver> localServerReceiverFuture,
             final NetHttpTransport netHttpTransport) throws IOException {
@@ -54,7 +53,6 @@ public class GoogleCalendarController {
         // Build flow and trigger user authorization request.
         GoogleAuthorizationCodeFlow flow = getFlow(netHttpTransport);
         LocalServerReceiver localServerReceiver = new LocalServerReceiver();
-        this.localServerReceiver = localServerReceiver;
         servers.add(localServerReceiver);
         // System.out.println(localServerReceiver.getRedirectUri());
         localServerReceiverFuture.complete(localServerReceiver);
@@ -104,7 +102,12 @@ public class GoogleCalendarController {
         // String url = getAuthorizeUrl(flow,
         // localServerReceiverFuture.get().getRedirectUri());
         LocalServerReceiver localServerReceiver = localServerReceiverFuture.get();
+        int count = 60 * 2;
         while (localServerReceiver.getPort() < 0) {
+            if (count-- <= 0) {
+                break;
+            }
+            System.out.println(count + " localServerReceiver port: " + localServerReceiver.getPort());
             TimeUnit.SECONDS.sleep(1);
         }
         String url = getAuthorizeUrl(flow,
@@ -155,23 +158,5 @@ public class GoogleCalendarController {
         File file = new java.io.File(CREDENTIALS_FOLDER + "/StoredCredential");
         return new ResponseEntity<>(file.getAbsolutePath() + " " + file.delete() + " rm on " + new Date(),
                 HttpStatus.OK);
-    }
-
-    @RequestMapping(value = "/login2")
-    public RedirectView login2() throws Exception {
-
-        final NetHttpTransport netHttpTransport = getNetHttpTransport();
-        GoogleAuthorizationCodeFlow flow = getFlow(netHttpTransport);
-        String url = getAuthorizeUrl(flow,
-                String.format("http://localhost:%s/Callback", localServerReceiver.getPort()));
-        return new RedirectView(url);
-    }
-
-    @RequestMapping(value = "/get")
-    public ResponseEntity<String> get() throws GeneralSecurityException, IOException {
-        CompletableFuture<LocalServerReceiver> localServerReceiverFuture = new CompletableFuture<>();
-        final NetHttpTransport netHttpTransport = getNetHttpTransport();
-        Credential credential = getCredentials(localServerReceiverFuture, netHttpTransport);
-        return new ResponseEntity<>(credential.toString(), HttpStatus.OK);
     }
 }
