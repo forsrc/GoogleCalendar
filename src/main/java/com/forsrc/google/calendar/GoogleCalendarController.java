@@ -5,6 +5,8 @@ import java.security.GeneralSecurityException;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeoutException;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
@@ -37,7 +39,8 @@ public class GoogleCalendarController {
     }
 
     @RequestMapping(value = "/list")
-    public ResponseEntity<List<String>> list() throws GeneralSecurityException, IOException {
+    public ResponseEntity<List<String>> list()
+            throws GeneralSecurityException, IOException, InterruptedException, ExecutionException, TimeoutException {
 
         List<String> list = new ArrayList<>();
 
