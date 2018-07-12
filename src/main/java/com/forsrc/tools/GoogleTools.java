@@ -58,6 +58,7 @@ public class GoogleTools {
     private String hostname = "localhost";
     private int port = 18888;
     private Details details;
+    private int maxResults = 100;
 
     public GoogleTools(Details details) {
         this.details = details;
@@ -220,6 +221,11 @@ public class GoogleTools {
         return this;
     }
 
+    public GoogleTools setMaxResults(int maxResults) {
+        this.maxResults = maxResults;
+        return this;
+    }
+
     public Details getDetails() {
         return details;
     }
@@ -251,29 +257,26 @@ public class GoogleTools {
         return calendar;
     }
 
+    public List<Event> list(Calendar calendar, DateTime min) throws IOException {
+
+        return list(calendar, null, min, null);
+    }
+
     public List<Event> list(Calendar calendar, DateTime min, DateTime max) throws IOException {
+        return list(calendar, null, min, max);
+    }
+
+    public List<Event> list(Calendar calendar, String email, DateTime min, DateTime max) throws IOException {
         Events events = calendar //
                 .events() //
-                .list("primary") //
-                .setMaxResults(100) //
+                .list(email == null ? "primary" : email) //
+                .setMaxResults(maxResults) //
                 .setTimeMin(min) //
                 .setTimeMax(max) //
                 .setOrderBy("startTime") //
                 .setSingleEvents(true) //
                 .execute();
-        List<Event> items = events.getItems();
-        return items;
-    }
 
-    public List<Event> list(Calendar calendar, DateTime min) throws IOException {
-        Events events = calendar //
-                .events() //
-                .list("primary") //
-                .setMaxResults(100) //
-                .setTimeMin(min) //
-                .setOrderBy("startTime") //
-                .setSingleEvents(true) //
-                .execute();
         List<Event> items = events.getItems();
         return items;
     }
@@ -557,18 +560,17 @@ public class GoogleTools {
         GoogleTools googleTools = new GoogleTools(GoogleTools.getDetails("/credentials.json"));
         googleTools.setPort(-1);
 
-        googleTools = new GoogleTools(GoogleTools.getDetails("/credentials.json"));
-
         Calendar calendar = googleTools.getCalendar();
 
-        List<Event> events = googleTools.list(calendar, new DateTime(0));
+        List<Event> events = googleTools.list(calendar, null, new DateTime(System.currentTimeMillis()), null);
         for (Event event : events) {
+            System.out.println("------");
             System.out.println(event);
         }
 
-        googleTools = new GoogleTools(GoogleTools.getDetails("/credentials.json"));
-        googleTools.setPort(-1);
-        System.out.println(googleTools.getAuthorizeUrl());
-        System.out.println(googleTools.getMyLocalServerReceiver());
+        // googleTools = new GoogleTools(GoogleTools.getDetails("/credentials.json"));
+        // googleTools.setPort(-1);
+        // System.out.println(googleTools.getAuthorizeUrl());
+        // System.out.println(googleTools.getMyLocalServerReceiver());
     }
 }
