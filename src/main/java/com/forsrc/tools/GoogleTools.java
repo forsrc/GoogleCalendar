@@ -27,6 +27,7 @@ import com.google.api.client.extensions.java6.auth.oauth2.VerificationCodeReceiv
 import com.google.api.client.extensions.jetty.auth.oauth2.LocalServerReceiver;
 import com.google.api.client.googleapis.auth.oauth2.GoogleAuthorizationCodeFlow;
 import com.google.api.client.googleapis.auth.oauth2.GoogleClientSecrets;
+import com.google.api.client.googleapis.auth.oauth2.GoogleClientSecrets.Details;
 import com.google.api.client.googleapis.javanet.GoogleNetHttpTransport;
 import com.google.api.client.http.javanet.NetHttpTransport;
 import com.google.api.client.json.JsonFactory;
@@ -41,55 +42,52 @@ import com.google.api.services.calendar.model.Events;
 
 public class GoogleTools {
 
-    private static final String APPLICATION_NAME = "Google API";
     private static final JsonFactory JSON_FACTORY = JacksonFactory.getDefaultInstance();
-    private static final String CREDENTIALS_FOLDER = "google/credentials"; // Directory to store user credentials.
     private static final List<String> SCOPES = Collections.singletonList(CalendarScopes.CALENDAR);
-    private static final String CLIENT_SECRET_DIR = "/credentials.json";
+
+    private String applicationName = "Google API";
+    private String credentialsFolder = "google/credentials"; // Directory to store user credentials.
 
     private static MyLocalServerReceiver myLocalServerReceiver;
 
-    private static GoogleTools INSTANCE;
+    private String hostname = "localhost";
+    private int port = 18888;
+    private Details details;
 
-    private GoogleTools() {
-
+    public GoogleTools(Details details) {
+        this.details = details;
     }
 
-    public static GoogleTools getInstance() {
-        if (INSTANCE == null) {
-            synchronized (GoogleTools.class) {
-                if (INSTANCE == null) {
-                    INSTANCE = new GoogleTools();
-                    return INSTANCE;
-                }
-            }
-        }
-        return INSTANCE;
-    }
-
-    private Credential getCredential(final CompletableFuture<MyLocalServerReceiver> localServerReceiverFuture,
+    private synchronized Credential getCredential(
+            final CompletableFuture<MyLocalServerReceiver> localServerReceiverFuture,
             final NetHttpTransport netHttpTransport) throws IOException {
+
         stop();
+
         // Build flow and trigger user authorization request.
-        GoogleAuthorizationCodeFlow flow = getFlow(netHttpTransport);
-        MyLocalServerReceiver localServerReceiver = new MyLocalServerReceiver("localhost", 18888, "/Callback", null,
-                null);
+        GoogleAuthorizationCodeFlow flow = getFlow(netHttpTransport, this.details);
+        MyLocalServerReceiver localServerReceiver = new MyLocalServerReceiver(hostname, port, "/Callback", null, null);
         myLocalServerReceiver = localServerReceiver;
         // System.out.println(localServerReceiver.getRedirectUri());
         localServerReceiverFuture.complete(localServerReceiver);
         return new AuthorizationCodeInstalledApp(flow, localServerReceiver).authorize("user");
     }
 
-    private GoogleAuthorizationCodeFlow getFlow(final NetHttpTransport netHttpTransport) throws IOException {
-
+    public static Details getDetails(String jsonFile) throws IOException {
         // Load client secrets.
-        InputStream in = GoogleTools.class.getResourceAsStream(CLIENT_SECRET_DIR);
+        InputStream in = GoogleTools.class.getResourceAsStream(jsonFile);
         GoogleClientSecrets clientSecrets = GoogleClientSecrets.load(JSON_FACTORY, new InputStreamReader(in));
-        clientSecrets = new GoogleClientSecrets().setWeb(clientSecrets.getDetails());
+        return clientSecrets.getDetails();
+    }
+
+    private GoogleAuthorizationCodeFlow getFlow(final NetHttpTransport netHttpTransport, Details details)
+            throws IOException {
+
+        GoogleClientSecrets clientSecrets = new GoogleClientSecrets().setWeb(details);
         // Build flow and trigger user authorization request.
         GoogleAuthorizationCodeFlow flow = new GoogleAuthorizationCodeFlow.Builder(netHttpTransport, JSON_FACTORY,
                 clientSecrets, SCOPES)
-                        .setDataStoreFactory(new FileDataStoreFactory(new java.io.File(CREDENTIALS_FOLDER)))
+                        .setDataStoreFactory(new FileDataStoreFactory(new java.io.File(credentialsFolder)))
                         .setAccessType("offline").build();
         return flow;
     }
@@ -110,7 +108,7 @@ public class GoogleTools {
 
         CompletableFuture<MyLocalServerReceiver> localServerReceiverFuture = new CompletableFuture<>();
         final NetHttpTransport netHttpTransport = getNetHttpTransport();
-        GoogleAuthorizationCodeFlow flow = getFlow(netHttpTransport);
+        GoogleAuthorizationCodeFlow flow = getFlow(netHttpTransport, this.details);
 
         CompletableFuture.runAsync(() -> {
             try {
@@ -147,7 +145,7 @@ public class GoogleTools {
         }
     }
 
-    public void stop(MyLocalServerReceiver myLocalServerReceiver) throws IOException {
+    public synchronized void stop(MyLocalServerReceiver myLocalServerReceiver) throws IOException {
         if (myLocalServerReceiver != null) {
             myLocalServerReceiver.stop();
             myLocalServerReceiver = null;
@@ -155,8 +153,18 @@ public class GoogleTools {
     }
 
     public boolean rm() {
-        File file = new File(CREDENTIALS_FOLDER + "/StoredCredential");
+        File file = new File(credentialsFolder + "/StoredCredential");
         return file.delete();
+    }
+
+    public GoogleTools setHostname(String hostname) {
+        this.hostname = hostname;
+        return this;
+    }
+
+    public GoogleTools setPort(int port) {
+        this.port = port;
+        return this;
     }
 
     public Calendar getCalendar() throws IOException, GeneralSecurityException {
@@ -164,7 +172,7 @@ public class GoogleTools {
         NetHttpTransport netHttpTransport = getNetHttpTransport();
         Credential credential = getCredential(localServerReceiverFuture, netHttpTransport);
         Calendar calendar = new Calendar.Builder(netHttpTransport, JSON_FACTORY, credential)
-                .setApplicationName(APPLICATION_NAME).build();
+                .setApplicationName(applicationName).build();
 
         return calendar;
     }
@@ -463,10 +471,15 @@ public class GoogleTools {
 
     public static void main(String[] args) throws IOException, GeneralSecurityException {
 
-        Calendar calendar = GoogleTools.getInstance().getCalendar();
-        List<Event> events = GoogleTools.getInstance().list(calendar, new DateTime(System.currentTimeMillis()));
+        GoogleTools googleTools = new GoogleTools(GoogleTools.getDetails("/credentials.json"));
+        googleTools.setPort(-1);
+
+        Calendar calendar = googleTools.getCalendar();
+
+        List<Event> events = googleTools.list(calendar, new DateTime(System.currentTimeMillis()));
         for (Event event : events) {
             System.out.println(event);
         }
+
     }
 }
