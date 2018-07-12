@@ -553,10 +553,6 @@ public class GoogleTools {
     }
 
     public static void main(String[] args) throws Exception {
-        System.setProperty("http.proxyHost", "192.168.10.3");
-        System.setProperty("http.proxyPort", "3128");
-        System.setProperty("https.proxyHost", "192.168.10.3");
-        System.setProperty("https.proxyPort", "3128");
 
         GoogleTools googleTools = new GoogleTools(GoogleTools.getDetails("/credentials.json"));
         googleTools.setPort(-1);
