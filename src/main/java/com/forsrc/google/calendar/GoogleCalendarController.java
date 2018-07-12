@@ -102,7 +102,7 @@ public class GoogleCalendarController {
         // String url = getAuthorizeUrl(flow,
         // localServerReceiverFuture.get().getRedirectUri());
         LocalServerReceiver localServerReceiver = localServerReceiverFuture.get();
-        int count = 60 * 2;
+        int count = 30;
         while (localServerReceiver.getPort() < 0) {
             if (count-- <= 0) {
                 break;
@@ -111,7 +111,7 @@ public class GoogleCalendarController {
             TimeUnit.SECONDS.sleep(1);
         }
         String url = getAuthorizeUrl(flow,
-                String.format("http://localhost:%s/Callback", localServerReceiver.getPort()));
+                String.format("http://%s:%s/Callback", localServerReceiver.getHost(), localServerReceiver.getPort()));
         return new RedirectView(url);
     }
 
