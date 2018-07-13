@@ -153,7 +153,7 @@ public class GoogleTools {
                 e.printStackTrace();
                 if (localServerReceiverFuture.isDone()) {
                     try {
-                        // stop(localServerReceiverFuture.get());
+                        stop(localServerReceiverFuture.get());
                     } catch (Exception ee) {
                         ee.printStackTrace();
                     }
