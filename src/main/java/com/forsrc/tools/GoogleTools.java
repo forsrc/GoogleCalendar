@@ -6,6 +6,7 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.security.GeneralSecurityException;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
@@ -44,11 +45,21 @@ import com.google.api.services.calendar.Calendar;
 import com.google.api.services.calendar.CalendarScopes;
 import com.google.api.services.calendar.model.Event;
 import com.google.api.services.calendar.model.Events;
+import com.google.api.services.gmail.Gmail;
+import com.google.api.services.gmail.GmailScopes;
+import com.google.api.services.gmail.model.ListMessagesResponse;
+import com.google.api.services.gmail.model.Message;
 
 public class GoogleTools {
 
     private static final JsonFactory JSON_FACTORY = JacksonFactory.getDefaultInstance();
-    private static final List<String> SCOPES = Collections.singletonList(CalendarScopes.CALENDAR);
+    private static final List<String> SCOPES = new ArrayList<String>() {
+        {
+            add(CalendarScopes.CALENDAR);
+            addAll(GmailScopes.all());
+            remove(GmailScopes.GMAIL_METADATA);
+        }
+    };
 
     private String applicationName = "Google API";
     private String credentialsFolder = "google/credentials"; // Directory to store user credentials.
@@ -257,6 +268,17 @@ public class GoogleTools {
         return calendar;
     }
 
+    public Gmail getGmail()
+            throws GeneralSecurityException, IOException, InterruptedException, ExecutionException, TimeoutException {
+        CompletableFuture<MyLocalServerReceiver> localServerReceiverFuture = new CompletableFuture<>();
+        NetHttpTransport netHttpTransport = getNetHttpTransport();
+        Credential credential = getCredential(localServerReceiverFuture, netHttpTransport);
+
+        Gmail gmail = new Gmail.Builder(netHttpTransport, JSON_FACTORY, credential).setApplicationName(applicationName)
+                .build();
+        return gmail;
+    }
+
     public List<Event> list(Calendar calendar, DateTime min) throws IOException {
 
         return list(calendar, null, min, null);
@@ -279,6 +301,25 @@ public class GoogleTools {
 
         List<Event> items = events.getItems();
         return items;
+    }
+
+    public List<Message> list(Gmail gmail) throws IOException {
+        return list(gmail, "me", "label:inbox");
+    }
+
+    public List<Message> list(Gmail gmail, String email, String q) throws IOException {
+        ListMessagesResponse response = gmail.users().messages().list(email).setQ(q).execute();
+        List<Message> messages = new ArrayList<Message>();
+        while (response.getMessages() != null) {
+            messages.addAll(response.getMessages());
+            if (response.getNextPageToken() != null) {
+                String pageToken = response.getNextPageToken();
+                response = gmail.users().messages().list(email).setQ(q).setPageToken(pageToken).execute();
+            } else {
+                break;
+            }
+        }
+        return messages;
     }
 
     public static class MyLocalServerReceiver implements VerificationCodeReceiver {
@@ -572,5 +613,11 @@ public class GoogleTools {
         // googleTools.setPort(-1);
         // System.out.println(googleTools.getAuthorizeUrl());
         // System.out.println(googleTools.getMyLocalServerReceiver());
+
+        Gmail gmail = googleTools.getGmail();
+        List<Message> messages = googleTools.list(gmail);
+        for (Message message : messages) {
+            System.out.println(message.toPrettyString());
+        }
     }
 }
