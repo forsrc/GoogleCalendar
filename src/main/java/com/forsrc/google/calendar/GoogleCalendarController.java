@@ -36,20 +36,20 @@ public class GoogleCalendarController {
         return new GoogleTools(GoogleTools.getDetails("/credentials.json"));
     }
 
-    @RequestMapping(value = "/login")
-    public RedirectView login() throws Exception {
-        String url = googleTools.getAuthorizeUrl();
+    @RequestMapping(value = "/login/{email}")
+    public RedirectView login(@PathVariable("email") String email) throws Exception {
+        String url = googleTools.getAuthorizeUrl(email);
         return new RedirectView(url);
     }
 
-    @RequestMapping(value = "/list")
-    public ResponseEntity<List<String>> list()
+    @RequestMapping(value = "/name/list/{email}")
+    public ResponseEntity<List<String>> list(@PathVariable("email") String email)
             throws GeneralSecurityException, IOException, InterruptedException, ExecutionException, TimeoutException {
 
         List<String> list = new ArrayList<>();
 
         DateTime now = new DateTime(System.currentTimeMillis());
-        Calendar calendar = googleTools.getCalendar();
+        Calendar calendar = googleTools.getCalendar(email);
         List<Event> items = googleTools.list(calendar, now);
         for (Event event : items) {
             DateTime start = event.getStart().getDateTime();
@@ -63,7 +63,7 @@ public class GoogleCalendarController {
     }
 
     @RequestMapping(value = "/list/{email}")
-    public ResponseEntity<List<Event>> listeEmail(@PathVariable String email, //
+    public ResponseEntity<List<Event>> listeEmail(@PathVariable("email") String email, //
             @RequestParam(name = "min", required = false) String min, //
             @RequestParam(name = "max", required = false) String max) throws GeneralSecurityException, IOException,
             InterruptedException, ExecutionException, TimeoutException, ParseException {
@@ -74,7 +74,7 @@ public class GoogleCalendarController {
         DateTime minDateTime = min == null ? new DateTime(new Date()) : new DateTime(sdf.parse(min));
         DateTime maxDateTime = max == null ? null : new DateTime(sdf.parse(max));
 
-        Calendar calendar = googleTools.getCalendar();
+        Calendar calendar = googleTools.getCalendar(email);
         List<Event> items = googleTools.list(calendar, email, minDateTime, maxDateTime);
         for (Event event : items) {
             DateTime start = event.getStart().getDateTime();
@@ -87,16 +87,9 @@ public class GoogleCalendarController {
         return new ResponseEntity<>(items, HttpStatus.OK);
     }
 
-    @RequestMapping(value = "/stop")
-    public ResponseEntity<String> stop() {
-        String message = "stoped on " + new Date();
-        googleTools.stop();
-        return new ResponseEntity<>(message, HttpStatus.OK);
-    }
-
-    @RequestMapping(value = "/rm")
-    public ResponseEntity<String> rm() {
-        boolean rm = googleTools.rm();
+    @RequestMapping(value = "/rm/{email}")
+    public ResponseEntity<String> rm(@PathVariable("email") String email) {
+        boolean rm = googleTools.rm(email);
         return new ResponseEntity<>(String.format("rm on %s: %s", new Date(), rm), HttpStatus.OK);
     }
 }
