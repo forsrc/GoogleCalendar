@@ -7,7 +7,6 @@ import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.security.GeneralSecurityException;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
@@ -62,9 +61,8 @@ public class GoogleTools {
     };
 
     private String applicationName = "Google API";
-    private String credentialsFolder = "google/credentials"; // Directory to store user credentials.
-
-    private MyLocalServerReceiver myLocalServerReceiver;
+    // private String credentialsFolder = "google/credentials"; // Directory to
+    // store user credentials.
 
     private String hostname = "localhost";
     private int port = 18888;
@@ -75,39 +73,30 @@ public class GoogleTools {
         this.details = details;
     }
 
-    public GoogleTools(Details details, String credentialsFolder) {
+    public GoogleTools(Details details, String hostname, int port) {
         this.details = details;
-        this.credentialsFolder = credentialsFolder;
-    }
-
-    public GoogleTools(Details details, String credentialsFolder, String hostname, int port) {
-        this.details = details;
-        this.credentialsFolder = credentialsFolder;
         this.hostname = hostname;
         this.port = port;
     }
 
-    private synchronized Credential getCredential(
+    private synchronized Credential getCredential(final String credentialsFolder,
             final CompletableFuture<MyLocalServerReceiver> localServerReceiverFuture,
             final NetHttpTransport netHttpTransport)
             throws IOException, InterruptedException, ExecutionException, TimeoutException {
-
-        stop();
 
         final ExecutorService executorService = Executors.newFixedThreadPool(1);
         Future<Credential> future = null;
         try {
             future = executorService.submit(() -> {
+                MyLocalServerReceiver localServerReceiver = new MyLocalServerReceiver(hostname, port, "/Callback", null,
+                        null);
                 try {
                     // Build flow and trigger user authorization request.
-                    GoogleAuthorizationCodeFlow flow = getFlow(netHttpTransport, this.details);
-                    MyLocalServerReceiver localServerReceiver = new MyLocalServerReceiver(hostname, port, "/Callback",
-                            null, null);
-                    myLocalServerReceiver = localServerReceiver;
+                    GoogleAuthorizationCodeFlow flow = getFlow(credentialsFolder, netHttpTransport, this.details);
                     localServerReceiverFuture.complete(localServerReceiver);
                     return new AuthorizationCodeInstalledApp(flow, localServerReceiver).authorize("user");
                 } catch (IOException e) {
-                    stop();
+                    stop(localServerReceiver);
                     throw e;
                 }
             });
@@ -126,14 +115,14 @@ public class GoogleTools {
         return clientSecrets.getDetails();
     }
 
-    private GoogleAuthorizationCodeFlow getFlow(final NetHttpTransport netHttpTransport, Details details)
-            throws IOException {
+    private GoogleAuthorizationCodeFlow getFlow(final String credentialsFolder, final NetHttpTransport netHttpTransport,
+            final Details details) throws IOException {
 
         GoogleClientSecrets clientSecrets = new GoogleClientSecrets().setWeb(details);
         // Build flow and trigger user authorization request.
         GoogleAuthorizationCodeFlow flow = new GoogleAuthorizationCodeFlow.Builder(netHttpTransport, JSON_FACTORY,
                 clientSecrets, SCOPES)
-                        .setDataStoreFactory(new FileDataStoreFactory(new java.io.File(credentialsFolder)))
+                        .setDataStoreFactory(new FileDataStoreFactory(new File("gooogle/" + credentialsFolder)))
                         .setAccessType("offline").build();
         return flow;
     }
@@ -146,23 +135,29 @@ public class GoogleTools {
 
     private String getAuthorizeUrl(final GoogleAuthorizationCodeFlow flow, final String redirectURI) throws Exception {
         AuthorizationCodeRequestUrl authorizationUrl = flow.newAuthorizationUrl().setRedirectUri(redirectURI);
-        System.out.println("cal authorizationUrl->" + authorizationUrl);
+        System.out.println("cal authorizationUrl -> " + authorizationUrl);
         return authorizationUrl.build();
     }
 
-    public String getAuthorizeUrl() throws Exception {
+    public String getAuthorizeUrl(final String credentialsFolder) throws Exception {
 
         final NetHttpTransport netHttpTransport = getNetHttpTransport();
-        GoogleAuthorizationCodeFlow flow = getFlow(netHttpTransport, this.details);
+        GoogleAuthorizationCodeFlow flow = getFlow(credentialsFolder, netHttpTransport, this.details);
 
         CompletableFuture<MyLocalServerReceiver> localServerReceiverFuture = new CompletableFuture<>();
 
         CompletableFuture.runAsync(() -> {
             try {
-                getCredential(localServerReceiverFuture, netHttpTransport);
+                getCredential(credentialsFolder, localServerReceiverFuture, netHttpTransport);
             } catch (Exception e) {
                 e.printStackTrace();
-                stop();
+                if (localServerReceiverFuture.isDone()) {
+                    try {
+                        // stop(localServerReceiverFuture.get());
+                    } catch (Exception ee) {
+                        ee.printStackTrace();
+                    }
+                }
             }
         });
         // String url = getAuthorizeUrl(flow,
@@ -171,7 +166,6 @@ public class GoogleTools {
         int count = 30;
         while (localServerReceiver.isStarted() && localServerReceiver.getPort() < 0) {
             if (count-- <= 0) {
-                stop();
                 throw new RuntimeException(String.format("Timeout localServerReceiver: %s:%s",
                         localServerReceiver.getHost(), localServerReceiver.getPort()));
             }
@@ -184,23 +178,14 @@ public class GoogleTools {
         return url;
     }
 
-    public void stop() {
-        try {
-            stop(myLocalServerReceiver);
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-    }
-
-    public synchronized void stop(MyLocalServerReceiver myLocalServerReceiver) throws IOException {
+    public synchronized void stop(final MyLocalServerReceiver myLocalServerReceiver) throws IOException {
         if (myLocalServerReceiver != null) {
             myLocalServerReceiver.stop();
-            myLocalServerReceiver = null;
         }
     }
 
-    public boolean rm() {
-        File file = new File(credentialsFolder + "/StoredCredential");
+    public boolean rm(final String credentialsFolder) {
+        File file = new File("google/" + credentialsFolder + "/StoredCredential");
         return file.delete();
     }
 
@@ -223,15 +208,6 @@ public class GoogleTools {
         return this;
     }
 
-    public String getCredentialsFolder() {
-        return credentialsFolder;
-    }
-
-    public GoogleTools setCredentialsFolder(String credentialsFolder) {
-        this.credentialsFolder = credentialsFolder;
-        return this;
-    }
-
     public GoogleTools setMaxResults(int maxResults) {
         this.maxResults = maxResults;
         return this;
@@ -249,30 +225,26 @@ public class GoogleTools {
         return hostname;
     }
 
-    public MyLocalServerReceiver getMyLocalServerReceiver() {
-        return myLocalServerReceiver;
-    }
-
     public int getPort() {
         return port;
     }
 
-    public Calendar getCalendar()
+    public Calendar getCalendar(final String credentialsFolder)
             throws IOException, GeneralSecurityException, InterruptedException, ExecutionException, TimeoutException {
         CompletableFuture<MyLocalServerReceiver> localServerReceiverFuture = new CompletableFuture<>();
         NetHttpTransport netHttpTransport = getNetHttpTransport();
-        Credential credential = getCredential(localServerReceiverFuture, netHttpTransport);
+        Credential credential = getCredential(credentialsFolder, localServerReceiverFuture, netHttpTransport);
         Calendar calendar = new Calendar.Builder(netHttpTransport, JSON_FACTORY, credential)
                 .setApplicationName(applicationName).build();
 
         return calendar;
     }
 
-    public Gmail getGmail()
+    public Gmail getGmail(final String credentialsFolder)
             throws GeneralSecurityException, IOException, InterruptedException, ExecutionException, TimeoutException {
         CompletableFuture<MyLocalServerReceiver> localServerReceiverFuture = new CompletableFuture<>();
         NetHttpTransport netHttpTransport = getNetHttpTransport();
-        Credential credential = getCredential(localServerReceiverFuture, netHttpTransport);
+        Credential credential = getCredential(credentialsFolder, localServerReceiverFuture, netHttpTransport);
 
         Gmail gmail = new Gmail.Builder(netHttpTransport, JSON_FACTORY, credential).setApplicationName(applicationName)
                 .build();
@@ -599,9 +571,9 @@ public class GoogleTools {
     public static void main(String[] args) throws Exception {
 
         GoogleTools googleTools = new GoogleTools(GoogleTools.getDetails("/credentials.json"));
-        googleTools.setPort(-1);
+        // googleTools.setPort(-1);
 
-        Calendar calendar = googleTools.getCalendar();
+        Calendar calendar = googleTools.getCalendar("forsrc");
 
         List<Event> events = googleTools.list(calendar, null, new DateTime(System.currentTimeMillis()), null);
         for (Event event : events) {
@@ -609,12 +581,7 @@ public class GoogleTools {
             System.out.println(event);
         }
 
-        // googleTools = new GoogleTools(GoogleTools.getDetails("/credentials.json"));
-        // googleTools.setPort(-1);
-        // System.out.println(googleTools.getAuthorizeUrl());
-        // System.out.println(googleTools.getMyLocalServerReceiver());
-
-        Gmail gmail = googleTools.getGmail();
+        Gmail gmail = googleTools.getGmail("forsrc");
         List<Message> messages = googleTools.list(gmail);
         for (Message message : messages) {
             System.out.println(message.toPrettyString());
