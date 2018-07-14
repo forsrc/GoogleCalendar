@@ -75,7 +75,7 @@ public class GoogleCalendarController {
         DateTime maxDateTime = max == null ? null : new DateTime(sdf.parse(max));
 
         Calendar calendar = googleTools.getCalendar(email);
-        List<Event> items = googleTools.list(calendar, email, minDateTime, maxDateTime);
+        List<Event> items = googleTools.list(calendar, minDateTime, maxDateTime);
         for (Event event : items) {
             DateTime start = event.getStart().getDateTime();
             if (start == null) {
