@@ -122,7 +122,7 @@ public class GoogleTools {
         // Build flow and trigger user authorization request.
         GoogleAuthorizationCodeFlow flow = new GoogleAuthorizationCodeFlow.Builder(netHttpTransport, JSON_FACTORY,
                 clientSecrets, SCOPES)
-                        .setDataStoreFactory(new FileDataStoreFactory(new File("gooogle/" + credentialsFolder)))
+                        .setDataStoreFactory(new FileDataStoreFactory(new File("google/" + credentialsFolder)))
                         .setAccessType("offline").build();
         return flow;
     }
